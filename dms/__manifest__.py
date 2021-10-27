@@ -4,18 +4,12 @@
 {
     "name": "Document Management System",
     "summary": """Document Management System for Odoo""",
-    "version": "13.0.8.1.3",
+    "version": "13.0.2.0.0",
     "category": "Document Management",
     "license": "LGPL-3",
-    "website": "https://github.com/OCA/dms",
+    "website": "http://github.com/OCA/dms",
     "author": "MuK IT, Tecnativa, Odoo Community Association (OCA)",
-    "depends": [
-        "web_drop_target",
-        "mail",
-        "http_routing",
-        "portal",
-        "mail_preview_base",
-    ],
+    "depends": ["web_drop_target", "mail", "http_routing", "portal"],
     "data": [
         "security/security.xml",
         "security/ir.model.access.csv",

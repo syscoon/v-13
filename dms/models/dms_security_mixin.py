@@ -1,250 +1,303 @@
 # Copyright 2020 Creu Blanca
-# Copyright 2021 Tecnativa - Víctor Martínez
 # License LGPL-3.0 or later (http://www.gnu.org/licenses/lgpl).
 
+from collections import defaultdict
 
-from logging import getLogger
-
-from odoo import api, fields, models
-from odoo.osv.expression import FALSE_DOMAIN, NEGATIVE_TERM_OPERATORS, OR, TRUE_DOMAIN
-
-_logger = getLogger(__name__)
+from odoo import SUPERUSER_ID, _, api, fields, models
+from odoo.exceptions import AccessError
 
 
 class DmsSecurityMixin(models.AbstractModel):
     _name = "dms.security.mixin"
     _description = "DMS Security Mixin"
 
-    # Submodels must define this field that points to the owner dms.directory
-    _directory_field = "directory_id"
+    # If set the group fields are restricted by the access group
+    _access_groups_fields = False
 
-    res_model = fields.Char(string="Linked attachments model", index=True, store=True)
-    res_id = fields.Integer(
-        string="Linked attachments record ID", index=True, store=True
-    )
-    record_ref = fields.Reference(
-        string="Record Referenced",
-        compute="_compute_record_ref",
-        selection=lambda self: self._get_ref_selection(),
-    )
+    # If set the group fields are recomputed as super administrator
+    _access_groups_sudo = True
+
+    # Set it to True to enforced security even if no group has been set
+    _access_groups_strict = False
+
+    # Set it to True to let the non strict mode check for existing groups per mode
+    _access_groups_mode = False
+
     permission_read = fields.Boolean(
-        compute="_compute_permissions",
+        compute="_compute_permissions_read",
         search="_search_permission_read",
         string="Read Access",
     )
+
     permission_create = fields.Boolean(
-        compute="_compute_permissions",
+        compute="_compute_permissions_create",
         search="_search_permission_create",
         string="Create Access",
     )
+
     permission_write = fields.Boolean(
-        compute="_compute_permissions",
+        compute="_compute_permissions_write",
         search="_search_permission_write",
         string="Write Access",
     )
+
     permission_unlink = fields.Boolean(
-        compute="_compute_permissions",
+        compute="_compute_permissions_unlink",
         search="_search_permission_unlink",
         string="Delete Access",
     )
 
     @api.model
-    def _get_ref_selection(self):
-        models = self.env["ir.model"].search([])
-        return [(model.model, model.name) for model in models]
+    def _add_magic_fields(self):
+        super(DmsSecurityMixin, self)._add_magic_fields()
 
-    @api.depends("res_model", "res_id")
-    def _compute_record_ref(self):
-        for record in self:
-            record.record_ref = False
-            if record.res_model and record.res_id:
-                record.record_ref = "{},{}".format(record.res_model, record.res_id)
+        def add(name, field):
+            if name not in self._fields:
+                self._add_field(name, field)
 
-    def _compute_permissions(self):
-        """Get permissions for the current record.
+        add(
+            "group_ids",
+            fields.Many2many(
+                _module=self._module,
+                comodel_name="dms.access.group",
+                relation="%s_groups_rel" % (self._table),
+                column1="aid",
+                column2="gid",
+                string="Groups",
+                automatic=True,
+                groups=self._access_groups_fields,
+            ),
+        )
+        add(
+            "complete_group_ids",
+            fields.Many2many(
+                _module=self._module,
+                comodel_name="dms.access.group",
+                relation="%s_complete_groups_rel" % (self._table),
+                column1="aid",
+                column2="gid",
+                string="Complete Groups",
+                compute="_compute_groups",
+                readonly=True,
+                store=True,
+                automatic=True,
+                compute_sudo=self._access_groups_sudo,
+                groups=self._access_groups_fields,
+            ),
+        )
 
-        ⚠ Not very performant; only display field on form views.
-        """
-        # Superuser unrestricted 🦸
-        if self.env.su:
-            self.update(
-                {
-                    "permission_create": True,
-                    "permission_read": True,
-                    "permission_unlink": True,
-                    "permission_write": True,
-                }
-            )
-            return
-        # Update according to presence when applying ir.rule
-        creatable = self._filter_access_rules("create")
-        readable = self._filter_access_rules("read")
-        unlinkable = self._filter_access_rules("unlink")
-        writeable = self._filter_access_rules("write")
-        for one in self:
-            one.update(
-                {
-                    "permission_create": bool(one & creatable),
-                    "permission_read": bool(one & readable),
-                    "permission_unlink": bool(one & unlinkable),
-                    "permission_write": bool(one & writeable),
-                }
-            )
+    def _filter_access(self, operation):
+        rec = self
+        if self.check_access_rights(operation, False):
+            rec = self._filter_access_rules(operation)
+        return rec.filter_access_groups(operation)
+
+    def _filter_access_ids(self, operation):
+        return self._filter_access(operation).ids
 
     @api.model
-    def _get_domain_by_inheritance(self, operation):
-        """Get domain for inherited accessible records."""
-        if self.env.su:
-            return []
-        inherited_access_field = "storage_id_inherit_access_from_parent_record"
-        if self._name != "dms.directory":
-            inherited_access_field = "{}.{}".format(
-                self._directory_field, inherited_access_field,
+    def _apply_access_groups(self, query, mode="read"):
+        if self.env.user.id == SUPERUSER_ID:
+            return None
+        # Fix access directory and files with share button (public)
+        if self.env.user.has_group("base.group_public"):
+            return None
+
+        where_clause = """
+            "{table}".id IN (
+                SELECT r.aid
+                FROM {table}_complete_groups_rel r
+                JOIN dms_access_group g ON r.gid = g.id
+                JOIN dms_access_group_users_rel u ON r.gid = u.gid
+                WHERE u.uid = %s AND g.perm_{mode} = true
             )
-        inherited_access_domain = [(inherited_access_field, "=", True)]
-        domains = []
-        # Get all used related records
-        related_groups = self.sudo().read_group(
-            domain=inherited_access_domain + [("res_model", "!=", False)],
-            fields=["res_id:array_agg"],
-            groupby=["res_model"],
+        """.format(
+            table=self._table, mode=mode
         )
-        for group in related_groups:
-            try:
-                model = self.env[group["res_model"]]
-            except KeyError:
-                # Model not registered. This is normal if you are upgrading the
-                # database. Otherwise, you probably have garbage DMS data.
-                # These records will be accessible by DB users only.
-                domains.append(
-                    [
-                        ("res_model", "=", group["res_model"]),
-                        (True, "=", self.env.user.has_group("base.group_user")),
-                    ]
+        if not self._access_groups_strict:
+            exists_clause = """
+                NOT EXISTS (
+                    SELECT 1
+                        FROM {table}_complete_groups_rel r
+                        JOIN dms_access_group g ON r.gid = g.id
+                        WHERE r.aid = "{table}".id {groups_mode}
                 )
-                continue
-            # Check model access only once per batch
-            if not model.check_access_rights(operation, raise_exception=False):
-                continue
-            domains.append([("res_model", "=", model._name), ("res_id", "=", False)])
-            # Check record access in batch too
-            group_ids = [i for i in group["res_id"] if i]  # Hack to remove None res_id
-            related_ok = model.browse(group_ids)._filter_access_rules_python(operation)
-            if not related_ok:
-                continue
-            domains.append(
-                [("res_model", "=", model._name), ("res_id", "in", related_ok.ids)]
+            """
+            groups_mode = (
+                self._access_groups_mode
+                and "AND g.perm_{mode} = true".format(mode=mode)
             )
-        result = inherited_access_domain + OR(domains)
-        return result
+            exists_clause = exists_clause.format(
+                table=self._table, groups_mode=groups_mode or ""
+            )
+            where_clause = "({groups_clause} OR {exists_clause})".format(
+                groups_clause=where_clause, exists_clause=exists_clause,
+            )
+        query.where_clause += [where_clause]
+        query.where_clause_params += [self.env.user.id]
 
     @api.model
-    def _get_access_groups_query(self, operation):
-        """Return the query to select access groups."""
-        operation_check = {
-            "create": "AND dag.perm_inclusive_create",
-            "read": "",
-            "unlink": "AND dag.perm_inclusive_unlink",
-            "write": "AND dag.perm_inclusive_write",
-        }[operation]
-        select = """
-            SELECT
-                dir_group_rel.aid
-            FROM
-                dms_directory_complete_groups_rel AS dir_group_rel
-                INNER JOIN dms_access_group AS dag
-                    ON dir_group_rel.gid = dag.id
-                INNER JOIN dms_access_group_users_rel AS users
-                    ON users.gid = dag.id
-            WHERE
-                users.uid = %s {}
+    def _apply_ir_rules(self, query, mode="read"):
+        super(DmsSecurityMixin, self)._apply_ir_rules(query, mode=mode)
+        self._apply_access_groups(query, mode=mode)
+
+    def _get_ids_without_access_groups(self, operation):
+        sql_query = """
+            SELECT id
+            FROM {table} a
+            WHERE NOT EXISTS (
+                SELECT 1
+                FROM {table}_complete_groups_rel r
+                JOIN dms_access_group g ON r.gid = g.id
+                WHERE r.aid = a.id {subset} {groups_mode}
+            );
+        """
+        subset = self.ids and "AND r.aid = ANY (VALUES {ids})".format(
+            ids=", ".join(map(lambda id: "(%s)" % id, self.ids))
+        )
+        groups_mode = (
+            self._access_groups_mode
+            and "AND g.perm_{operation} = true".format(operation=operation)
+        )
+        # pylint: disable=sql-injection
+        sql_query = sql_query.format(
+            table=self._table, subset=subset or "", groups_mode=groups_mode or "",
+        )
+        self.env.cr.execute(sql_query)
+        return list(map(lambda val: val[0], self.env.cr.fetchall()))
+
+    @api.model
+    def _search_permission_read(self, operator, operand):
+        if operator == "=" and operand:
+            return [("id", "in", self.search([])._filter_access_ids("read"))]
+        return [("id", "not in", self.search([])._filter_access_ids("read"))]
+
+    @api.model
+    def _search_permission_create(self, operator, operand):
+        if operator == "=" and operand:
+            return [("id", "in", self.search([])._filter_access_ids("create"))]
+        return [("id", "not in", self.search([])._filter_access_ids("create"))]
+
+    @api.model
+    def _search_permission_write(self, operator, operand):
+        if operator == "=" and operand:
+            return [("id", "in", self.search([])._filter_access_ids("write"))]
+        return [("id", "not in", self.search([])._filter_access_ids("write"))]
+
+    @api.model
+    def _search_permission_unlink(self, operator, operand):
+        if operator == "=" and operand:
+            return [("id", "in", self.search([])._filter_access_ids("unlink"))]
+        return [("id", "not in", self.search([])._filter_access_ids("unlink"))]
+
+    def _compute_permissions_read(self):
+        records = self._filter_access("read")
+        for record in records:
+            record.update({"permission_read": True})
+        for record in self - records:
+            record.update({"permission_read": False})
+
+    def _compute_permissions_create(self):
+        records = self._filter_access("create")
+        for record in records:
+            record.update({"permission_create": True})
+        for record in self - records:
+            record.update({"permission_create": False})
+
+    def _compute_permissions_write(self):
+        records = self._filter_access("write")
+        for record in records:
+            record.update({"permission_write": True})
+        for record in self - records:
+            record.update({"permission_write": False})
+
+    def _compute_permissions_unlink(self):
+        records = self._filter_access("unlink")
+        for record in records:
+            record.update({"permission_unlink": True})
+        for record in self - records:
+            record.update({"permission_unlink": False})
+
+    def check_access(self, operation, raise_exception=False):
+        try:
+            access_right = self.check_access_rights(operation, raise_exception)
+            access_rule = self.check_access_rule(operation) is None
+            return (
+                access_right
+                and access_rule
+                and self.check_access_groups(operation) is None
+            )
+        except AccessError:
+            if raise_exception:
+                raise
+            return False
+
+    def check_access_groups(self, operation):
+        if self.env.user.id == SUPERUSER_ID:
+            return None
+        group_ids = set(self.ids) - set(self._get_ids_without_access_groups(operation))
+        if group_ids:
+            # pylint: disable=sql-injection
+            sql_query = """
+                SELECT r.aid, perm_{operation}
+                FROM {table}_complete_groups_rel r
+                JOIN dms_access_group g ON r.gid = g.id
+                JOIN dms_access_group_users_rel u ON r.gid = u.gid
+                WHERE r.aid = ANY (VALUES {ids}) AND u.uid = %s;
             """.format(
-            operation_check
-        )
-        return (select, (self.env.uid,))
+                operation=operation,
+                table=self._table,
+                ids=", ".join(map(lambda id: "(%s)" % id, group_ids)),
+            )
+            self.env.cr.execute(sql_query, [self.env.user.id])
+            result = defaultdict(list)
+            for key, val in self.env.cr.fetchall():
+                result[key].append(val)
+            if len(result.keys()) < len(group_ids) or not all(
+                list(map(lambda val: any(val), result.values()))
+            ):
+                raise AccessError(
+                    _(
+                        "The requested operation cannot be completed due "
+                        "to group security restrictions. "
+                        "Please contact your system administrator."
+                        "\n\n(Document type: %s, Operation: %s)"
+                    )
+                    % (self._description, operation)
+                )
 
-    @api.model
-    def _get_domain_by_access_groups(self, operation):
-        """Get domain for records accessible applying DMS access groups."""
-        result = [
-            (
-                "%s.storage_id_inherit_access_from_parent_record"
-                % self._directory_field,
-                "=",
-                False,
-            ),
-            (
-                self._directory_field,
-                "inselect",
-                self._get_access_groups_query(operation),
-            ),
-        ]
-        return result
+    def filter_access_groups(self, operation):
+        if self.env.user.id == SUPERUSER_ID:
+            return self
+        ids_with_access = self._get_ids_without_access_groups(operation)
+        group_ids = set(self.ids) - set(ids_with_access)
+        if group_ids:
+            # pylint: disable=sql-injection
+            sql_query = """
+                SELECT r.aid
+                FROM {table}_complete_groups_rel r
+                JOIN dms_access_group g ON r.gid = g.id
+                JOIN dms_access_group_users_rel u ON r.gid = u.gid
+                WHERE r.aid = ANY (VALUES {ids})
+                      AND u.uid = %s AND g.perm_{operation} = true;
+            """.format(
+                table=self._table,
+                ids=", ".join(map(lambda id: "(%s)" % id, group_ids)),
+                operation=operation,
+            )
+            self.env.cr.execute(sql_query, [self.env.user.id])
+            ids_with_access += list(map(lambda val: val[0], self.env.cr.fetchall()))
+        return self & self.browse(ids_with_access)
 
-    @api.model
-    def _get_permission_domain(self, operator, value, operation):
-        """Abstract logic for searching computed permission fields."""
-        _self = self
-        # HACK ir.rule domain is always computed with sudo, so if this check is
-        # true, we can assume safely that you're checking permissions
-        if self.env.su and value == self.env.uid:
-            _self = self.sudo(False)
-            value = bool(value)
-        # Tricky one, to know if you want to search
-        # positive or negative access
-        positive = (operator not in NEGATIVE_TERM_OPERATORS) == bool(value)
-        if _self.env.su:
-            # You're SUPERUSER_ID
-            return TRUE_DOMAIN if positive else FALSE_DOMAIN
-        # Obtain and combine domains
-        result = OR(
-            [
-                _self._get_domain_by_access_groups(operation),
-                _self._get_domain_by_inheritance(operation),
-            ]
-        )
-        if not positive:
-            result.insert(0, "!")
-        return result
+    def _write(self, vals):
+        self.check_access_groups("write")
+        return super(DmsSecurityMixin, self)._write(vals)
 
-    @api.model
-    def _search_permission_create(self, operator, value):
-        return self._get_permission_domain(operator, value, "create")
+    def unlink(self):
+        self.check_access_groups("unlink")
+        return super(DmsSecurityMixin, self).unlink()
 
-    @api.model
-    def _search_permission_read(self, operator, value):
-        return self._get_permission_domain(operator, value, "read")
-
-    @api.model
-    def _search_permission_unlink(self, operator, value):
-        return self._get_permission_domain(operator, value, "unlink")
-
-    @api.model
-    def _search_permission_write(self, operator, value):
-        return self._get_permission_domain(operator, value, "write")
-
-    def _filter_access_rules_python(self, operation):
-        # Only kept to not break inheritance; see next comment
-        result = super()._filter_access_rules_python(operation)
-        # HACK Always fall back to applying rules by SQL.
-        # Upstream `_filter_acccess_rules_python()` doesn't use computed fields
-        # search methods. Thus, it will take the `[('permission_{operation}',
-        # '=', user.id)]` rule literally. Obviously that will always fail
-        # because `self[f"permission_{operation}"]` will always be a `bool`,
-        # while `user.id` will always be an `int`.
-        result |= self._filter_access_rules(operation)
-        return result
-
-    @api.model_create_multi
-    def create(self, vals_list):
-        # Create as sudo to avoid testing creation permissions before DMS security
-        # groups are attached (otherwise nobody would be able to create)
-        res = super(DmsSecurityMixin, self.sudo()).create(vals_list)
-        # Need to flush now, so all groups are stored in DB and the SELECT used
-        # to check access works
-        res.flush()
-        # Go back to original sudo state and check we really had creation permission
-        res = res.sudo(self.env.su)
-        res.check_access_rights("create")
-        res.check_access_rule("create")
-        return res
+    @api.depends("group_ids")
+    def _compute_groups(self):
+        for record in self:
+            record.complete_group_ids = record.group_ids

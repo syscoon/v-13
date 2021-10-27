@@ -1,9 +1,6 @@
 # Copyright 2017-2019 MuK IT GmbH.
 # Copyright 2020 Creu Blanca
-# Copyright 2021 Tecnativa - Víctor Martínez
 # License LGPL-3.0 or later (http://www.gnu.org/licenses/lgpl).
-
-from odoo.exceptions import UserError
 
 from .common import DocumentsBaseCase, multi_users
 
@@ -34,7 +31,7 @@ class FileTestCase(DocumentsBaseCase):
     @multi_users(lambda self: self.multi_users(), callback="_setup_test_data")
     def test_create_file(self):
         root_directory = self.create_directory(storage=self.new_storage)
-        self.create_file(directory=root_directory)
+        self.create_file(root_directory)
         sub_directory = self.create_directory(directory=root_directory)
         self.create_file(sub_directory)
         self.assertEqual(root_directory.count_total_files, 2)
@@ -70,13 +67,19 @@ class FileTestCase(DocumentsBaseCase):
 
     @multi_users(lambda self: self.multi_users(), callback="_setup_test_data")
     def test_move_directory(self):
-        with self.assertRaises(UserError):
-            self.directory_root_demo_01.write(
-                {
-                    "is_root_directory": False,
-                    "parent_id": self.directory_root_demo_02.id,
-                }
-            )
+        file = self.directory_root_demo_03.file_ids[0]
+        path_names = file.path_names
+        self.directory_root_demo_01.write(
+            {
+                "root_storage_id": False,
+                "is_root_directory": False,
+                "parent_id": self.directory_root_demo_02.id,
+            }
+        )
+        self.directory_root_demo_01.flush()
+        # We need to refresh as the field is not stored
+        file.refresh()
+        self.assertNotEqual(path_names, file.path_names)
 
     @multi_users(lambda self: self.multi_users(), callback="_setup_test_data")
     def test_unlink_file(self):
@@ -86,7 +89,7 @@ class FileTestCase(DocumentsBaseCase):
 
     @multi_users(lambda self: self.multi_users(), callback="_setup_test_data")
     def test_compute_thumbnail(self):
-        self.assertTrue(self.file_demo_01.image_128)
+        self.assertTrue(self.file_demo_01.thumbnail)
 
     @multi_users(lambda self: self.multi_users(), callback="_setup_test_data")
     def test_compute_path_names(self):
