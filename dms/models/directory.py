@@ -1,15 +1,16 @@
 # Copyright 2017-2019 MuK IT GmbH.
 # Copyright 2020 Creu Blanca
+# Copyright 2021 Tecnativa - Víctor Martínez
 # License LGPL-3.0 or later (http://www.gnu.org/licenses/lgpl).
 
 import base64
-import functools
 import logging
-import operator
 from collections import defaultdict
 
 from odoo import _, api, fields, models, tools
-from odoo.exceptions import AccessError, ValidationError
+from odoo.exceptions import UserError, ValidationError
+from odoo.osv.expression import OR
+from odoo.tools import consteq
 
 from odoo.addons.http_routing.models.ir_http import slugify
 
@@ -30,6 +31,7 @@ class DmsDirectory(models.Model):
         "mail.thread",
         "mail.activity.mixin",
         "mail.alias.mixin",
+        "abstract.dms.mixin",
     ]
 
     _rec_name = "complete_name"
@@ -37,8 +39,7 @@ class DmsDirectory(models.Model):
 
     _parent_store = True
     _parent_name = "parent_id"
-
-    name = fields.Char(string="Name", required=True, index=True)
+    _directory_field = _parent_name
 
     parent_path = fields.Char(index=True)
     is_root_directory = fields.Boolean(
@@ -49,38 +50,58 @@ class DmsDirectory(models.Model):
         parent inherits the settings form its parent.""",
     )
 
-    root_storage_id = fields.Many2one(
-        comodel_name="dms.storage",
-        string="Root Storage",
-        ondelete="restrict",
-        compute="_compute_directory_type",
-        store=True,
-        readonly=False,
-        copy=True,
-    )
-
+    # Override acording to defined in AbstractDmsMixin
     storage_id = fields.Many2one(
-        compute="_compute_storage",
+        compute="_compute_storage_id",
+        compute_sudo=True,
+        readonly=False,
         comodel_name="dms.storage",
         string="Storage",
         ondelete="restrict",
         auto_join=True,
         store=True,
     )
-
     parent_id = fields.Many2one(
         comodel_name="dms.directory",
-        domain="[('permission_create', '=', True)]",
         string="Parent Directory",
+        domain="[('permission_create', '=', True)]",
         ondelete="restrict",
-        auto_join=True,
+        # Access to a directory doesn't necessarily mean access its parent, so
+        # prefetching this field could lead to misleading access errors
+        prefetch=False,
         index=True,
         store=True,
         readonly=False,
-        compute="_compute_directory_type",
+        compute="_compute_parent_id",
         copy=True,
+        default=lambda self: self._default_parent_id(),
     )
 
+    def _default_parent_id(self):
+        context = self.env.context
+        if context.get("active_model") == self._name and context.get("active_id"):
+            return context["active_id"]
+        else:
+            return False
+
+    group_ids = fields.Many2many(
+        comodel_name="dms.access.group",
+        relation="dms_directory_groups_rel",
+        column1="aid",
+        column2="gid",
+        string="Groups",
+    )
+    complete_group_ids = fields.Many2many(
+        comodel_name="dms.access.group",
+        relation="dms_directory_complete_groups_rel",
+        column1="aid",
+        column2="gid",
+        string="Complete Groups",
+        compute="_compute_groups",
+        readonly=True,
+        store=True,
+        compute_sudo=True,
+    )
     complete_name = fields.Char(
         "Complete Name", compute="_compute_complete_name", store=True
     )
@@ -90,25 +111,6 @@ class DmsDirectory(models.Model):
         string="Subdirectories",
         auto_join=False,
         copy=False,
-    )
-    is_hidden = fields.Boolean(
-        string="Storage is Hidden", related="storage_id.is_hidden", readonly=True
-    )
-    company_id = fields.Many2one(
-        related="storage_id.company_id",
-        comodel_name="res.company",
-        string="Company",
-        readonly=True,
-        store=True,
-        index=True,
-    )
-
-    color = fields.Integer(string="Color", default=0)
-
-    category_id = fields.Many2one(
-        comodel_name="dms.category",
-        context="{'dms_category_show_path': True}",
-        string="Category",
     )
 
     tag_ids = fields.Many2many(
@@ -200,17 +202,41 @@ class DmsDirectory(models.Model):
                 """,
     )
 
-    def _get_share_url(self, redirect=False, signup_partner=False, pid=None):
-        self.ensure_one()
-        return "/my/dms/directory/{}?access_token={}&db={}".format(
-            self.id, self._portal_ensure_token(), self.env.cr.dbname,
-        )
+    @api.model
+    def _get_domain_by_access_groups(self, operation):
+        """Special rules for directories."""
+        self_filter = [
+            ("storage_id_inherit_access_from_parent_record", "=", False),
+            ("id", "inselect", self._get_access_groups_query(operation)),
+        ]
+        # Upstream only filters by parent directory
+        result = super()._get_domain_by_access_groups(operation)
+        if operation == "create":
+            # When creating, I need create access in parent directory, or
+            # self-create permission if it's a root directory
+            result = OR(
+                [
+                    [("is_root_directory", "=", False)] + result,
+                    [("is_root_directory", "=", True)] + self_filter,
+                ]
+            )
+        else:
+            # In other operations, I only need self access
+            result = self_filter
+        return result
+
+    def _compute_access_url(self):
+        super()._compute_access_url()
+        for item in self:
+            item.access_url = "/my/dms/directory/%s" % (item.id)
 
     def check_access_token(self, access_token=False):
         res = False
         if access_token:
-            items = self.env["dms.directory"].search(
-                [("access_token", "=", access_token)]
+            items = (
+                self.env["dms.directory"]
+                .sudo()
+                .search([("access_token", "=", access_token)])
             )
             if items:
                 item = items[0]
@@ -230,55 +256,63 @@ class DmsDirectory(models.Model):
     @api.model
     def _get_parent_categories(self, access_token):
         self.ensure_one()
-        directories = [self]
+        directories = []
         current_directory = self
+        while current_directory:
+            directories.insert(0, current_directory)
+            if access_token and consteq(current_directory.access_token, access_token):
+                return directories
+            current_directory = current_directory.parent_id
         if access_token:
-            # Only show parent categories to access_token
-            stop = False
-            while current_directory.parent_id and not stop:
-                if current_directory.access_token == access_token:
-                    stop = False
-                else:
-                    directories.append(current_directory.parent_id)
-                current_directory = current_directory.parent_id
-        else:
-            while (
-                current_directory.parent_id
-                and current_directory.parent_id.check_access("read", False)
-            ):
-                directories.append(current_directory.parent_id)
-                current_directory = current_directory.parent_id
-        return directories[::-1]
+            # Reaching here means we didn't find the directory accessible by this token
+            return [self]
+        return directories
 
-    def _get_own_root_directories(self, user_id):
-        ids = []
-        items = (
+    def _get_own_root_directories(self):
+        return (
             self.env["dms.directory"]
-            .with_user(user_id)
-            .search([("is_hidden", "=", False)])
+            .search([("is_hidden", "=", False), ("parent_id", "=", False)])
+            .ids
         )
-        for item in items:
-            current_directory = item
-            while (
-                current_directory.parent_id
-                and current_directory.parent_id.check_access("read", False)
-            ):
-                current_directory = current_directory.parent_id
 
-            if current_directory.id not in ids:
-                ids.append(current_directory.id)
+    allowed_model_ids = fields.Many2many(
+        related="storage_id.model_ids", comodel_name="ir.model",
+    )
+    model_id = fields.Many2one(
+        comodel_name="ir.model",
+        domain="[('id', 'in', allowed_model_ids)]",
+        compute="_compute_model_id",
+        inverse="_inverse_model_id",
+        string="Model",
+        store=True,
+    )
+    storage_id_save_type = fields.Selection(
+        related="storage_id.save_type",
+        related_sudo=True,
+        readonly=True,
+        store=False,
+        prefetch=False,
+    )
+    storage_id_inherit_access_from_parent_record = fields.Boolean(
+        related="storage_id.inherit_access_from_parent_record",
+        related_sudo=True,
+        auto_join=True,
+        store=True,
+    )
 
-        return ids
+    @api.depends("res_model")
+    def _compute_model_id(self):
+        for record in self:
+            if not record.res_model:
+                record.model_id = False
+                continue
+            record.model_id = self.env["ir.model"].search(
+                [("model", "=", record.res_model)]
+            )
 
-    def check_access(self, operation, raise_exception=False):
-        res = super(DmsDirectory, self).check_access(operation, raise_exception)
-        if self.env.user.has_group("base.group_portal"):
-            if self.id in self._get_ids_without_access_groups(operation):
-                res = False
-        # Fix show breadcrumb with share button (public)
-        if self.env.user.has_group("base.group_public"):
-            res = True
-        return res
+    def _inverse_model_id(self):
+        for record in self:
+            record.res_model = record.model_id.model
 
     @api.depends("name", "complete_name")
     def _compute_display_name(self):
@@ -322,26 +356,6 @@ class DmsDirectory(models.Model):
     # ----------------------------------------------------------
     # Search
     # ----------------------------------------------------------
-    @api.model
-    def _search(
-        self,
-        args,
-        offset=0,
-        limit=None,
-        order=None,
-        count=False,
-        access_rights_uid=None,
-    ):
-        result = super(DmsDirectory, self)._search(
-            args, offset, limit, order, False, access_rights_uid
-        )
-        if result:
-            directory_ids = set(result)
-            if self.env.user.has_group("base.group_portal"):
-                exclude_ids = self._get_ids_without_access_groups("read")
-                directory_ids -= set(exclude_ids)
-                return directory_ids
-        return result
 
     @api.model
     def _search_starred(self, operator, operand):
@@ -359,13 +373,14 @@ class DmsDirectory(models.Model):
             else:
                 category.complete_name = category.name
 
-    @api.depends("root_storage_id", "parent_id")
-    def _compute_storage(self):
+    @api.depends("parent_id")
+    def _compute_storage_id(self):
         for record in self:
-            if record.is_root_directory:
-                record.storage_id = record.root_storage_id
-            else:
+            if record.parent_id:
                 record.storage_id = record.parent_id.storage_id
+            else:
+                # HACK: Not needed in v14 due to odoo/odoo#64359
+                record.storage_id = record.storage_id
 
     @api.depends("user_star_ids")
     def _compute_starred(self):
@@ -424,41 +439,29 @@ class DmsDirectory(models.Model):
             )
             record.size = sum(rec.get("size", 0) for rec in recs)
 
-    @api.depends("inherit_group_ids", "parent_path")
+    @api.depends(
+        "group_ids", "inherit_group_ids", "parent_id.complete_group_ids", "parent_path",
+    )
     def _compute_groups(self):
-        records = self.filtered(lambda record: record.parent_path)
-        paths = [list(map(int, rec.parent_path.split("/")[:-1])) for rec in records]
-        ids = paths and set(functools.reduce(operator.concat, paths)) or []
-        read = self.browse(ids).read(["inherit_group_ids", "group_ids"])
-        data = {entry.pop("id"): entry for entry in read}
-        for record in records:
-            complete_group_ids = set()
-            for directory_id in reversed(
-                list(map(int, record.parent_path.split("/")[:-1]))
-            ):
-                if directory_id in data:
-                    complete_group_ids |= set(data[directory_id].get("group_ids", []))
-                    if not data[directory_id].get("inherit_group_ids"):
-                        break
-            record.update({"complete_group_ids": [(6, 0, list(complete_group_ids))]})
-        for record in self - records:
-            if record.parent_id and record.inherit_group_ids:
-                complete_groups = record.parent_id.complete_group_ids
-                record.complete_group_ids = record.group_ids | complete_groups
-            else:
-                record.complete_group_ids = record.group_ids
+        """Get all DMS security groups affecting this directory."""
+        for one in self:
+            groups = one.group_ids
+            if one.inherit_group_ids:
+                groups |= one.parent_id.complete_group_ids
+            self.complete_group_ids = groups
 
     # ----------------------------------------------------------
     # View
     # ----------------------------------------------------------
 
     @api.depends("is_root_directory")
-    def _compute_directory_type(self):
+    def _compute_parent_id(self):
         for record in self:
             if record.is_root_directory:
                 record.parent_id = None
             else:
-                record.root_storage_id = None
+                # HACK: Not needed in v14 due to odoo/odoo#64359
+                record.parent_id = record.parent_id
 
     @api.depends("category_id")
     def _compute_tags(self):
@@ -467,6 +470,19 @@ class DmsDirectory(models.Model):
                 lambda rec: not rec.category_id or rec.category_id == record.category_id
             )
             record.tag_ids = tags
+
+    @api.onchange("storage_id")
+    def _onchange_storage_id(self):
+        for record in self:
+            if (
+                record.storage_id.save_type == "attachment"
+                and record.storage_id.inherit_access_from_parent_record
+            ):
+                record.group_ids = False
+
+    @api.onchange("model_id")
+    def _onchange_model_id(self):
+        self._inverse_model_id()
 
     # ----------------------------------------------------------
     # Constrains
@@ -478,38 +494,43 @@ class DmsDirectory(models.Model):
             raise ValidationError(_("Error! You cannot create recursive directories."))
         return True
 
-    @api.constrains("is_root_directory", "root_storage_id", "parent_id")
+    @api.constrains("storage_id", "model_id")
+    def _check_storage_id_attachment_model_id(self):
+        for record in self:
+            if record.storage_id.save_type != "attachment":
+                continue
+            if not record.model_id:
+                raise ValidationError(
+                    _("A directory has to have model in attachment storage.")
+                )
+            if not record.is_root_directory and not record.res_id:
+                raise ValidationError(
+                    _("This directory needs to be associated to a record.")
+                )
+
+    @api.constrains("is_root_directory", "storage_id")
     def _check_directory_storage(self):
         for record in self:
-            if record.is_root_directory and not record.root_storage_id:
-                raise ValidationError(_("A root directory has to have a root storage."))
-            if not record.is_root_directory and not record.parent_id:
-                raise ValidationError(_("A directory has to have a parent directory."))
-            if record.parent_id and (
-                record.is_root_directory or record.root_storage_id
-            ):
+            if record.is_root_directory and not record.storage_id:
+                raise ValidationError(_("A root directory has to have a storage."))
+
+    @api.constrains("is_root_directory", "parent_id")
+    def _check_directory_parent(self):
+        for record in self:
+            if record.is_root_directory and record.parent_id:
                 raise ValidationError(
                     _("A directory can't be a root and have a parent directory.")
                 )
-
-    @api.constrains("parent_id")
-    def _check_directory_access(self):
-        for record in self:
-            if not record.parent_id.check_access("create", raise_exception=False):
-                raise ValidationError(
-                    _(
-                        "The parent directory has to have the permission "
-                        "to create directories."
-                    )
-                )
+            if not record.is_root_directory and not record.parent_id:
+                raise ValidationError(_("A directory has to have a parent directory."))
 
     @api.constrains("name")
     def _check_name(self):
         for record in self:
-            if not check_name(record.name):
+            if self.env.context.get("check_name", True) and not check_name(record.name):
                 raise ValidationError(_("The directory name is invalid."))
             if record.is_root_directory:
-                childs = record.sudo().root_storage_id.root_directory_ids.name_get()
+                childs = record.sudo().storage_id.root_directory_ids.name_get()
             else:
                 childs = record.sudo().parent_id.child_directory_ids.name_get()
             if list(
@@ -540,14 +561,11 @@ class DmsDirectory(models.Model):
     def copy(self, default=None):
         self.ensure_one()
         default = dict(default or [])
-        if "root_storage_id" in default:
-            storage = self.env["dms.storage"].browse(default["root_storage_id"])
-            names = storage.sudo().root_directory_ids.mapped("name")
-        elif "parent_id" in default:
+        if "parent_id" in default:
             parent_directory = self.browse(default["parent_id"])
             names = parent_directory.sudo().child_directory_ids.mapped("name")
         elif self.is_root_directory:
-            names = self.sudo().root_storage_id.root_directory_ids.mapped("name")
+            names = self.sudo().storage_id.root_directory_ids.mapped("name")
         else:
             names = self.sudo().parent_id.child_directory_ids.mapped("name")
         default.update({"name": unique_name(self.name, names)})
@@ -606,15 +624,28 @@ class DmsDirectory(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         for vals in vals_list:
-            if vals.get("root_storage_id", False):
-                vals["storage_id"] = vals["root_storage_id"]
             if vals.get("parent_id", False):
                 parent = self.browse([vals["parent_id"]])
                 data = next(iter(parent.sudo().read(["storage_id"])), {})
                 vals["storage_id"] = self._convert_to_write(data).get("storage_id")
-        return super().create(vals_list)
+        # Hack to prevent error related to mail_message parent not exists in some cases
+        ctx = dict(self.env.context).copy()
+        ctx.update({"default_parent_id": False})
+        res = super(DmsDirectory, self.with_context(ctx)).create(vals_list)
+        return res
 
     def write(self, vals):
+        if vals.get("storage_id"):
+            for item in self:
+                if item.storage_id.id != vals["storage_id"]:
+                    raise UserError(_("It is not possible to change the storage."))
+        if vals.get("parent_id"):
+            parent = self.browse([vals["parent_id"]])
+            for item in self:
+                if item.parent_id.storage_id != parent.storage_id:
+                    raise UserError(
+                        _("It is not possible to change parent to other storage.")
+                    )
         # Groups part
         if any(key in vals for key in ["group_ids", "inherit_group_ids"]):
             with self.env.norecompute():
@@ -625,36 +656,15 @@ class DmsDirectory(models.Model):
             records.recompute()
         else:
             res = super().write(vals)
-
-        if self and any(
-            field for field in vals if field in ["root_storage_id", "parent_id"]
-        ):
-            records = self.sudo().search([("id", "child_of", self.ids)]) - self
-            if "root_storage_id" in vals:
-                records.write({"storage_id": vals["root_storage_id"]})
-            elif "parent_id" in vals:
-                parent = self.browse([vals["parent_id"]])
-                data = next(iter(parent.sudo().read(["storage_id"])), {})
-                records.write(
-                    {"storage_id": self._convert_to_write(data).get("storage_id")}
-                )
         return res
 
     def unlink(self):
-        if self and self.check_access("unlink", raise_exception=True):
-            domain = [
-                "&",
-                ("directory_id", "child_of", self.ids),
-                "&",
-                ("locked_by", "!=", self.env.uid),
-                ("locked_by", "!=", False),
-            ]
-            if self.env["dms.file"].sudo().search(domain):
-                raise AccessError(_("A file is locked, the folder cannot be deleted."))
-            self.env["dms.file"].sudo().search(
-                [("directory_id", "child_of", self.ids)]
-            ).unlink()
-            return super(
-                DmsDirectory, self.sudo().search([("id", "child_of", self.ids)])
-            ).unlink()
+        """Custom cascade unlink.
+
+        Cannot rely on DB backend's cascade because subfolder and subfile unlinks
+        must check custom permissions implementation.
+        """
+        self.file_ids.unlink()
+        if self.child_directory_ids:
+            self.child_directory_ids.unlink()
         return super().unlink()
