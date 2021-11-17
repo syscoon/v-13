@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data>
+
+        <record id="res_config_settings_view_form" model="ir.ui.view">
+            <field name="name">res.config.settings.view.form.inherit.account</field>
+            <field name="model">res.config.settings</field>
+            <field name="priority" eval="40"/>
+            <field name="inherit_id" ref="account.res_config_settings_view_form"/>
+            <field name="arch" type="xml">
+                <xpath expr="//div[@id='analytic']" position="after">
+                    <h2>Payment Discount</h2>
+                    <div class="row mt16 o_settings_container" id="payment_discount">
+                        <div class="col-12 col-lg-6 o_setting_box"
+                            id="payment_discount_withhold"
+                            title="Here you can specify the number in days for orders to still receive a discount after the discount period has expired.">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane" name="sepa_right_pane">
+                                <label for="payment_discount_withhold"/>
+                                <span class="fa fa-lg fa-building-o" title="Values set here are company-specific." aria-label="Values set here are company-specific." groups="base.group_multi_company" role="img"/>
+                                <div class="text-muted">
+                                    Here you can specify the number in days for orders to still receive a discount after the discount period has expired.
+                                </div>
+                                <field name="payment_discount_withhold"/>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box"
+                            id="payment_discount_default_income_account_id"
+                            title="Here you need to set the default discount account for income discounts.">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane" name="sepa_right_pane">
+                                <label for="payment_discount_default_income_account_id"/>
+                                <span class="fa fa-lg fa-building-o" title="Values set here are company-specific." aria-label="Values set here are company-specific." groups="base.group_multi_company" role="img"/>
+                                <div class="text-muted">
+                                    This account is used if there is no other payment discount account for income is defined.
+                                </div>
+                                <field name="payment_discount_default_income_account_id"/>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box"
+                            id="payment_discount_default_expense_account_id"
+                            title="Here you need to set the default discount account for expense discounts.">
+                            <div class="o_setting_left_pane"/>
+                            <div class="o_setting_right_pane" name="sepa_right_pane">
+                                <label for="payment_discount_default_expense_account_id"/>
+                                <span class="fa fa-lg fa-building-o" title="Values set here are company-specific." aria-label="Values set here are company-specific." groups="base.group_multi_company" role="img"/>
+                                <div class="text-muted">
+                                    This account is used if there is no other payment discount account for expenses is defined.
+                                </div>
+                                <field name="payment_discount_default_expense_account_id"/>
+                            </div>
+                        </div>
+                    </div>
+                </xpath>
+            </field>
+        </record>
+
+    </data>
+</odoo>

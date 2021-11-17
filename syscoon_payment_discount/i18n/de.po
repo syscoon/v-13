@@ -1,0 +1,372 @@
+# Translation of Odoo Server.
+# This file contains the translation of the following modules:
+#   * syscoon_payment_discount
+#
+msgid ""
+msgstr ""
+"Project-Id-Version: Odoo Server 14.0+e\n"
+"Report-Msgid-Bugs-To: \n"
+"POT-Creation-Date: 2021-06-06 07:39+0000\n"
+"PO-Revision-Date: 2021-06-06 09:51+0200\n"
+"Last-Translator: \n"
+"Language-Team: \n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: \n"
+"Language: de\n"
+"X-Generator: Poedit 2.4.1\n"
+
+#. module: syscoon_payment_discount
+#: model_terms:ir.ui.view,arch_db:syscoon_payment_discount.res_config_settings_view_form
+msgid ""
+"<span class=\"fa fa-lg fa-building-o\" title=\"Values set here are company-"
+"specific.\" aria-label=\"Values set here are company-specific.\" groups="
+"\"base.group_multi_company\" role=\"img\"/>"
+msgstr ""
+"<span class=\"fa fa-lg fa-building-o\" title=\"Hier eingestellte Werte "
+"sind firmenspezifisch.\" aria-label=\"Hier eingestellte Werte sind "
+"firmenspezifisch.\" groups=\"base.group_multi_company\" role=\"img\"/>"
+
+#. module: syscoon_payment_discount
+#: code:addons/syscoon_payment_discount/models/account_payment.py:0
+#, python-format
+msgid "A payment must always belongs to a bank or cash journal."
+msgstr ""
+"Eine Zahlung muss immer einem Bank- oder Kassen-Journal erstellt werden."
+
+#. module: syscoon_payment_discount
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment_register__discount_source_amount_currency
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment_register__discounted_source_amount_currency
+msgid "Amount to Pay (foreign currency)"
+msgstr "Zahlungsbetrag (Fremdwährung)"
+
+#. module: syscoon_payment_discount
+#: model:ir.model,name:syscoon_payment_discount.model_res_config_settings
+msgid "Config Settings"
+msgstr "Konfiguration"
+
+#. module: syscoon_payment_discount
+#: code:addons/syscoon_payment_discount/models/account_payment.py:0
+#, python-format
+msgid "Customer Payment"
+msgstr "Kundenzahlung"
+
+#. module: syscoon_payment_discount
+#: code:addons/syscoon_payment_discount/models/account_payment.py:0
+#, python-format
+msgid "Customer Reimbursement"
+msgstr "Kundenrückerstattung"
+
+#. module: syscoon_payment_discount
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_res_company__payment_discount_default_expense_account_id
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_res_config_settings__payment_discount_default_expense_account_id
+msgid "Default Expense Discount Account"
+msgstr "Standard-Aufwandskonto für Skonti"
+
+#. module: syscoon_payment_discount
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_res_company__payment_discount_default_income_account_id
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_res_config_settings__payment_discount_default_income_account_id
+msgid "Default Income Discount Account"
+msgstr "Standard-Erlöskonto für Skonti"
+
+#. module: syscoon_payment_discount
+#: model_terms:ir.ui.view,arch_db:syscoon_payment_discount.view_invoice_tree
+msgid "Disc. Amount"
+msgstr "Skontobetrag"
+
+#. module: syscoon_payment_discount
+#: model_terms:ir.ui.view,arch_db:syscoon_payment_discount.view_invoice_tree
+msgid "Disc. Date"
+msgstr "Skontodatum"
+
+#. module: syscoon_payment_discount
+#: model_terms:ir.ui.view,arch_db:syscoon_payment_discount.view_invoice_tree
+msgid "Disc. Payment Amount"
+msgstr "skontierter Zahlbetrag"
+
+#. module: syscoon_payment_discount
+#: model_terms:ir.ui.view,arch_db:syscoon_payment_discount.view_invoice_tree
+msgid "Disc. Percent"
+msgstr "Skonto Prozent"
+
+#. module: syscoon_payment_discount
+#: code:addons/syscoon_payment_discount/wizards/account_payment_register.py:0
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_bank_statement_line__payment_discount_percent
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_move__payment_discount_percent
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment__payment_discount_percent
+#, python-format
+msgid "Discount"
+msgstr "Skonto"
+
+#. module: syscoon_payment_discount
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_move_line__payment_discount_amount
+msgid "Discount Amount"
+msgstr "Skontobetrag"
+
+#. module: syscoon_payment_discount
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_move_line__payment_disocunt_amount_currency
+msgid "Discount Amount in Currency"
+msgstr "Skontobetrag (Fremdwährung)"
+
+#. module: syscoon_payment_discount
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_bank_statement_line__payment_discount_date
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_move__payment_discount_date
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment__payment_discount_date
+msgid "Discount Date"
+msgstr "Skontodatum"
+
+#. module: syscoon_payment_discount
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_bank_statement_line__payment_discount_amount_total
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_move__payment_discount_amount_total
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment__discounted_amount
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment__payment_discount_amount_total
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment_register__discounted_amount
+msgid "Discounted Amount"
+msgstr "skontierter Zahlbetrag"
+
+#. module: syscoon_payment_discount
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_bank_statement_line__payment_discount_amount_total_currency
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_move__payment_discount_amount_total_currency
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment__payment_discount_amount_total_currency
+msgid "Discounted Amount in Currency"
+msgstr "skontierter Zahlbetrag (Fremdwährung)"
+
+#. module: syscoon_payment_discount
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment_register__discount_source_amount
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment_register__discounted_source_amount
+msgid "Discounted Amount to Pay (foreign currency)"
+msgstr "Skontierter Betrag zu zahlen (Fremdwährung)"
+
+#. module: syscoon_payment_discount
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_move__display_name
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_move_line__display_name
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment__display_name
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment_register__display_name
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment_term__display_name
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_tax__display_name
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_res_company__display_name
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_res_config_settings__display_name
+msgid "Display Name"
+msgstr "Anzeigename"
+
+#. module: syscoon_payment_discount
+#: model_terms:ir.ui.view,arch_db:syscoon_payment_discount.res_config_settings_view_form
+msgid ""
+"Here you can specify the number in days for orders to still receive a "
+"discount after the discount period has expired."
+msgstr ""
+"Hier können Sie die Anzahl in Tagen angeben, in denen Bestellungen noch "
+"einen Rabatt erhalten, nachdem die Rabattperiode abgelaufen ist."
+
+#. module: syscoon_payment_discount
+#: model_terms:ir.ui.view,arch_db:syscoon_payment_discount.res_config_settings_view_form
+msgid ""
+"Here you need to set the default discount account for expense discounts."
+msgstr "Hier geben Sie das Standard-Skonto-Konto für Aufwände an."
+
+#. module: syscoon_payment_discount
+#: model_terms:ir.ui.view,arch_db:syscoon_payment_discount.res_config_settings_view_form
+msgid ""
+"Here you need to set the default discount account for income discounts."
+msgstr "Hier geben Sie das Standard-Skonto-Konto für Erlöse an."
+
+#. module: syscoon_payment_discount
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_move__id
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_move_line__id
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment__id
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment_register__id
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment_term__id
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_tax__id
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_res_company__id
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_res_config_settings__id
+msgid "ID"
+msgstr ""
+
+#. module: syscoon_payment_discount
+#: model:ir.model.fields,help:syscoon_payment_discount.field_account_payment_term__use_with_discount
+msgid ""
+"If checkd, the Odoo standard for splitting the invoice amount will be "
+"desabled."
+msgstr ""
+"Wenn angekreuzt, wird der Odoo-Standard für die Aufteilung des "
+"Rechnungsbetrags deaktiviert."
+
+#. module: syscoon_payment_discount
+#: model:ir.model,name:syscoon_payment_discount.model_res_company
+msgid "Jira Configuration"
+msgstr ""
+
+#. module: syscoon_payment_discount
+#: model:ir.model,name:syscoon_payment_discount.model_account_move
+msgid "Journal Entry"
+msgstr "Buchungssatz"
+
+#. module: syscoon_payment_discount
+#: model:ir.model,name:syscoon_payment_discount.model_account_move_line
+msgid "Journal Item"
+msgstr "Buchungszeile"
+
+#. module: syscoon_payment_discount
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_move____last_update
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_move_line____last_update
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment____last_update
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment_register____last_update
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment_term____last_update
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_tax____last_update
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_res_company____last_update
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_res_config_settings____last_update
+msgid "Last Modified on"
+msgstr "Zuletzt geändert am"
+
+#. module: syscoon_payment_discount
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_bank_statement_line__payment_actual_payment_line
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_move__payment_actual_payment_line
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment__payment_actual_payment_line
+msgid "Payment Actual Payment Line"
+msgstr "Tatsächliche Zahlungszeile"
+
+#. module: syscoon_payment_discount
+#: model_terms:ir.ui.view,arch_db:syscoon_payment_discount.res_config_settings_view_form
+msgid "Payment Discount"
+msgstr "Skonto"
+
+#. module: syscoon_payment_discount
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_tax__syscoon_payment_discount_account
+msgid "Payment Discount Account"
+msgstr "Skonto Konto"
+
+#. module: syscoon_payment_discount
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_res_company__payment_discount_withhold
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_res_config_settings__payment_discount_withhold
+msgid "Payment Discount Withhold"
+msgstr "Skontofristzurechnung"
+
+#. module: syscoon_payment_discount
+#: model:ir.model,name:syscoon_payment_discount.model_account_payment_term
+msgid "Payment Terms"
+msgstr "Zahlungsbedingungen"
+
+#. module: syscoon_payment_discount
+#: model:ir.model,name:syscoon_payment_discount.model_account_payment
+msgid "Payments"
+msgstr "Zahlungen"
+
+#. module: syscoon_payment_discount
+#: model:ir.model,name:syscoon_payment_discount.model_account_payment_register
+msgid "Register Payment"
+msgstr "Einzahlung erfassen"
+
+#. module: syscoon_payment_discount
+#: model:ir.model,name:syscoon_payment_discount.model_account_tax
+msgid "Tax"
+msgstr "Steuer"
+
+#. module: syscoon_payment_discount
+#: code:addons/syscoon_payment_discount/models/account_payment.py:0
+#, python-format
+msgid ""
+"The journal entry %s reached an invalid state relative to its payment.\n"
+"To be consistent, the journal entry must always contains:\n"
+"- one journal item involving the outstanding payment/receipts account.\n"
+"- one journal item involving a receivable/payable account.\n"
+"- optional journal items, all sharing the same account.\n"
+"\n"
+msgstr ""
+"Die Journalbuchung %s hat einen ungültigen Zustand in Bezug auf ihre "
+"Zahlung erreicht.\n"
+"Um konsistent zu sein, muss die Journalbuchung immer enthalten:\n"
+"- eine Journalposition, die das ausstehende Zahlungs-/Eingangskonto "
+"betrifft.\n"
+"- eine Journalposition, die ein Forderungs-/Verbindlichkeitskonto "
+"betrifft.\n"
+"- optionale Journalposten, die alle das gleiche Konto betreffen.\n"
+
+#. module: syscoon_payment_discount
+#: code:addons/syscoon_payment_discount/models/account_payment.py:0
+#, python-format
+msgid ""
+"The journal entry %s reached an invalid state relative to its payment.\n"
+"To be consistent, the journal items must share the same currency."
+msgstr ""
+"Die Journalbuchung %s hat einen ungültigen Zustand in Bezug auf ihre "
+"Zahlung erreicht.\n"
+"Um konsistent zu sein, müssen die Journalposten die gleiche Währung haben."
+
+#. module: syscoon_payment_discount
+#: code:addons/syscoon_payment_discount/models/account_payment.py:0
+#, python-format
+msgid ""
+"The journal entry %s reached an invalid state relative to its payment.\n"
+"To be consistent, the journal items must share the same partner."
+msgstr ""
+"Die Journalbuchung %s hat einen ungültigen Zustand in Bezug auf ihre "
+"Zahlung erreicht.\n"
+"Um konsistent zu sein, müssen die Journalposten denselben Partner haben."
+
+#. module: syscoon_payment_discount
+#: code:addons/syscoon_payment_discount/wizards/account_payment_register.py:0
+#, python-format
+msgid ""
+"There is no default income or expense payment discount account set. Please "
+"go to the accounting configuration and set them!"
+msgstr ""
+"Es ist kein Standard-Erlös- oder AAfuands-Zahlungsrabattkonto eingestellt. "
+"Bitte gehen Sie in die Buchhaltungskonfiguration und stellen Sie diese ein!"
+
+#. module: syscoon_payment_discount
+#: model_terms:ir.ui.view,arch_db:syscoon_payment_discount.res_config_settings_view_form
+msgid ""
+"This account is used if there is no other payment discount account for "
+"expenses is defined."
+msgstr ""
+"Dieses Konto wird verwendet, wenn kein anderes Skonto-Konto für "
+"Aufwendungen definiert ist."
+
+#. module: syscoon_payment_discount
+#: model_terms:ir.ui.view,arch_db:syscoon_payment_discount.res_config_settings_view_form
+msgid ""
+"This account is used if there is no other payment discount account for "
+"income is defined."
+msgstr ""
+"Dieses Konto wird verwendet, wenn kein anderes Skonto-Konto für Erlöse "
+"definiert ist."
+
+#. module: syscoon_payment_discount
+#: code:addons/syscoon_payment_discount/models/account_payment.py:0
+#, python-format
+msgid "Transfer from %s"
+msgstr "Übertragung von %s"
+
+#. module: syscoon_payment_discount
+#: code:addons/syscoon_payment_discount/models/account_payment.py:0
+#, python-format
+msgid "Transfer to %s"
+msgstr "Übertragung zu %s"
+
+#. module: syscoon_payment_discount
+#: model:ir.model.fields,field_description:syscoon_payment_discount.field_account_payment_term__use_with_discount
+msgid "Use With Payment Discount"
+msgstr "Verwendung mit Skonto"
+
+#. module: syscoon_payment_discount
+#: code:addons/syscoon_payment_discount/models/account_payment.py:0
+#, python-format
+msgid "Vendor Payment"
+msgstr "Lieferantenzahlung"
+
+#. module: syscoon_payment_discount
+#: code:addons/syscoon_payment_discount/models/account_payment.py:0
+#, python-format
+msgid "Vendor Reimbursement"
+msgstr "Lieferantengutschrift"
+
+#. module: syscoon_payment_discount
+#: code:addons/syscoon_payment_discount/models/account_payment.py:0
+#, python-format
+msgid ""
+"You can't create a new payment without an outstanding payments/receipts "
+"account set on the %s journal."
+msgstr ""
+"Sie können keine neue Zahlung erstellen, ohne ein ausstehendes Zahlungs/"
+"Quittungs-Konto im %s Journal eingestellt ist."
